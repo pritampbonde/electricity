@@ -30,6 +30,9 @@ A Python application that calculates electricity bills using **2026 Residential 
 - **Modern web UI** built with Streamlit (gradient cards, slab tables, interactive data table)
 - **CLI mode** for terminal usage
 
+## Use Tmux Session 
+- ** tmux new-session -c /Users/pritam.bonde@cohesity.com/Downloads/electricity-main/electricity_billing \; split-window -h -c /Users/pritam.bonde@cohesity.com/Downloads/electricity-main/electricity_billing
+
 ## Quick Start
 
 ```bash
