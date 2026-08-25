@@ -17,20 +17,33 @@ CREATE TABLE IF NOT EXISTS bills (
     bill_no         TEXT    NOT NULL UNIQUE,
     created_at      TEXT    NOT NULL,
     due_date        TEXT    NOT NULL,
+    prompt_due_date TEXT    NOT NULL DEFAULT '',
+    bill_month      INTEGER NOT NULL DEFAULT 0,
+    bill_year       INTEGER NOT NULL DEFAULT 0,
     customer_name   TEXT    NOT NULL,
     phone           TEXT    NOT NULL,
     units_consumed  INTEGER NOT NULL,
     connected_load_kw REAL  NOT NULL DEFAULT 1.0,
     energy_charge   REAL    NOT NULL,
     fac_charge      REAL    NOT NULL DEFAULT 0.0,
+    wheeling_charge REAL    NOT NULL DEFAULT 0.0,
     tod_fixed_charge REAL   NOT NULL DEFAULT 0.0,
     municipal_surcharge REAL NOT NULL DEFAULT 0.0,
     fixed_charge    REAL    NOT NULL,
-    security_deposit_arrears REAL NOT NULL DEFAULT 0.0,
-    delayed_payment_charge REAL NOT NULL DEFAULT 0.0,
-    meter_rent      REAL    NOT NULL DEFAULT 0.0,
+    duty_base       REAL    NOT NULL DEFAULT 0.0,
     electricity_duty_percent REAL NOT NULL DEFAULT 0.0,
     electricity_duty REAL   NOT NULL DEFAULT 0.0,
+    current_bill    REAL    NOT NULL DEFAULT 0.0,
+    net_adjustment  REAL    NOT NULL DEFAULT 0.0,
+    net_amount      REAL    NOT NULL DEFAULT 0.0,
+    prompt_payment_discount REAL NOT NULL DEFAULT 0.0,
+    prompt_payable  REAL    NOT NULL DEFAULT 0.0,
+    after_due_payable REAL  NOT NULL DEFAULT 0.0,
+    security_deposit_arrears REAL NOT NULL DEFAULT 0.0,
+    security_deposit_held REAL NOT NULL DEFAULT 0.0,
+    security_deposit_interest REAL NOT NULL DEFAULT 0.0,
+    delayed_payment_charge REAL NOT NULL DEFAULT 0.0,
+    meter_rent      REAL    NOT NULL DEFAULT 0.0,
     gst_percent     REAL    NOT NULL,
     gst_amount      REAL    NOT NULL,
     subtotal        REAL    NOT NULL,
@@ -44,10 +57,23 @@ CREATE TABLE IF NOT EXISTS bills (
 _NEW_COLUMNS: list[tuple[str, str]] = [
     ("connected_load_kw", "REAL NOT NULL DEFAULT 1.0"),
     ("fac_charge", "REAL NOT NULL DEFAULT 0.0"),
+    ("wheeling_charge", "REAL NOT NULL DEFAULT 0.0"),
     ("tod_fixed_charge", "REAL NOT NULL DEFAULT 0.0"),
     ("municipal_surcharge", "REAL NOT NULL DEFAULT 0.0"),
+    ("duty_base", "REAL NOT NULL DEFAULT 0.0"),
+    ("current_bill", "REAL NOT NULL DEFAULT 0.0"),
+    ("net_adjustment", "REAL NOT NULL DEFAULT 0.0"),
+    ("net_amount", "REAL NOT NULL DEFAULT 0.0"),
+    ("prompt_due_date", "TEXT NOT NULL DEFAULT ''"),
+    ("prompt_payment_discount", "REAL NOT NULL DEFAULT 0.0"),
+    ("prompt_payable", "REAL NOT NULL DEFAULT 0.0"),
+    ("after_due_payable", "REAL NOT NULL DEFAULT 0.0"),
     ("security_deposit_arrears", "REAL NOT NULL DEFAULT 0.0"),
+    ("security_deposit_held", "REAL NOT NULL DEFAULT 0.0"),
+    ("security_deposit_interest", "REAL NOT NULL DEFAULT 0.0"),
     ("delayed_payment_charge", "REAL NOT NULL DEFAULT 0.0"),
+    ("bill_month", "INTEGER NOT NULL DEFAULT 0"),
+    ("bill_year", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
@@ -95,13 +121,26 @@ def insert_bill(
     total: float,
     connected_load_kw: float = 1.0,
     fac_charge: float = 0.0,
+    wheeling_charge: float = 0.0,
     tod_fixed_charge: float = 0.0,
     municipal_surcharge: float = 0.0,
-    security_deposit_arrears: float = 0.0,
-    delayed_payment_charge: float = 0.0,
-    meter_rent: float = 0.0,
+    duty_base: float = 0.0,
     electricity_duty_percent: float = 0.0,
     electricity_duty: float = 0.0,
+    current_bill: float = 0.0,
+    net_adjustment: float = 0.0,
+    net_amount: float = 0.0,
+    prompt_due_date: str = "",
+    prompt_payment_discount: float = 0.0,
+    prompt_payable: float = 0.0,
+    after_due_payable: float = 0.0,
+    security_deposit_arrears: float = 0.0,
+    security_deposit_held: float = 0.0,
+    security_deposit_interest: float = 0.0,
+    delayed_payment_charge: float = 0.0,
+    meter_rent: float = 0.0,
+    bill_month: int = 0,
+    bill_year: int = 0,
     txt_path: str = "",
     pdf_path: str = "",
 ) -> int:
@@ -110,22 +149,37 @@ def insert_bill(
         cur = conn.execute(
             """
             INSERT INTO bills (
-                bill_no, created_at, due_date, customer_name, phone,
+                bill_no, created_at, due_date, prompt_due_date,
+                bill_month, bill_year,
+                customer_name, phone,
                 units_consumed, connected_load_kw,
-                energy_charge, fac_charge, tod_fixed_charge, municipal_surcharge,
-                fixed_charge, security_deposit_arrears, delayed_payment_charge,
-                meter_rent, electricity_duty_percent, electricity_duty,
-                gst_percent, gst_amount, subtotal, total,
+                energy_charge, fac_charge, wheeling_charge,
+                tod_fixed_charge, municipal_surcharge, fixed_charge,
+                duty_base, electricity_duty_percent, electricity_duty,
+                current_bill, net_adjustment, net_amount,
+                prompt_payment_discount, prompt_payable, after_due_payable,
+                security_deposit_arrears, security_deposit_held,
+                security_deposit_interest, delayed_payment_charge,
+                meter_rent, gst_percent, gst_amount, subtotal, total,
                 txt_path, pdf_path
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
-                bill_no, created_at, due_date, customer_name, phone,
+                bill_no, created_at, due_date, prompt_due_date,
+                bill_month, bill_year,
+                customer_name, phone,
                 units_consumed, connected_load_kw,
-                energy_charge, fac_charge, tod_fixed_charge, municipal_surcharge,
-                fixed_charge, security_deposit_arrears, delayed_payment_charge,
-                meter_rent, electricity_duty_percent, electricity_duty,
-                gst_percent, gst_amount, subtotal, total,
+                energy_charge, fac_charge, wheeling_charge,
+                tod_fixed_charge, municipal_surcharge, fixed_charge,
+                duty_base, electricity_duty_percent, electricity_duty,
+                current_bill, net_adjustment, net_amount,
+                prompt_payment_discount, prompt_payable, after_due_payable,
+                security_deposit_arrears, security_deposit_held,
+                security_deposit_interest, delayed_payment_charge,
+                meter_rent, gst_percent, gst_amount, subtotal, total,
                 txt_path, pdf_path,
             ),
         )
@@ -133,10 +187,7 @@ def insert_bill(
 
 
 def next_bill_seq_for_date(date_yyyymmdd: str) -> int:
-    """Return the next 4-digit sequence for bill numbers on a given date.
-
-    Looks at existing ``EB-YYYYMMDD-NNNN`` rows so counters survive restarts.
-    """
+    """Return the next 4-digit sequence for bill numbers on a given date."""
     prefix = f"EB-{date_yyyymmdd}-"
     with _connect() as conn:
         rows = conn.execute(

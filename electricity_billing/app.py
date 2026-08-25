@@ -13,23 +13,28 @@ from billing_config import (
     TARIFF_NAME,
     TARIFF_ORDER,
     TARIFF_CONFIG_PATH,
+    RESIDENTIAL_FIXED,
+    RESIDENTIAL_FIXED_NOTE,
+    FIXED_CHARGE_MODE,
     TOD_FIXED_PER_KW,
-    TOD_FIXED_NOTE,
-    DEFAULT_CONNECTED_LOAD_KW,
     MUNICIPAL_SURCHARGE,
     MUNICIPAL_SURCHARGE_NOTE,
     MUNICIPAL_SURCHARGE_EFFECTIVE_FROM,
+    WHEELING_RATE_PER_UNIT,
+    WHEELING_NOTE,
+    ELECTRICITY_DUTY_PERCENT,
+    ELECTRICITY_DUTY_NOTE,
+    PROMPT_PAYMENT_DISCOUNT_PERCENT,
+    AFTER_DUE_SURCHARGE,
+    DIGITAL_PAYMENT_DISCOUNT,
     SECURITY_DEPOSIT_ARREARS,
     SECURITY_DEPOSIT_HELD,
     SECURITY_DEPOSIT_INTEREST,
     SECURITY_DEPOSIT_NOTE,
-    DELAYED_PAYMENT_CHARGE,
-    DELAYED_PAYMENT_CHARGE_AFTER,
-    DELAYED_PAYMENT_EARLY_DEADLINE,
-    DELAYED_PAYMENT_LATE_DEADLINE,
-    DELAYED_PAYMENT_NOTE,
     INCLUDE_SECURITY_DEPOSIT_BY_DEFAULT,
     INCLUDE_DELAYED_PAYMENT_BY_DEFAULT,
+    DELAYED_PAYMENT_CHARGE,
+    DEFAULT_NET_ADJUSTMENT,
 )
 from database import (
     bill_number_exists,
@@ -46,7 +51,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Custom CSS ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     .main-header {
@@ -116,7 +120,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── Header ──────────────────────────────────────────────────────────────────────
 order_line = f" &mdash; {TARIFF_ORDER}" if TARIFF_ORDER else ""
 st.markdown(f"""
 <div class="main-header">
@@ -126,17 +129,15 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── Sidebar: Tariff Info ────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(f"### 📋 Tariff Card — {TARIFF_NAME}")
     st.caption(os.path.basename(TARIFF_CONFIG_PATH))
 
     slab_rows = ""
-    for up_to, energy_rate, fac_rate, label in SLABS:
-        range_txt = label if up_to is None else label
+    for _up_to, energy_rate, fac_rate, label in SLABS:
         slab_rows += (
             f"<tr>"
-            f"<td>{range_txt}</td>"
+            f"<td>{label}</td>"
             f"<td><span class='rate-badge'>₹{energy_rate:.2f}</span></td>"
             f"<td><span class='rate-badge'>₹{fac_rate:.3f}</span></td>"
             f"</tr>"
@@ -150,45 +151,54 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("**Fixed Charges** *(not linked to consumption)*")
-    total_fixed_default = TOD_FIXED_PER_KW * DEFAULT_CONNECTED_LOAD_KW + MUNICIPAL_SURCHARGE
+    st.markdown("**Fixed Charges**")
+    fixed_line = (
+        f"₹{TOD_FIXED_PER_KW:.2f}/kW/month"
+        if FIXED_CHARGE_MODE == "per_kw"
+        else f"₹{RESIDENTIAL_FIXED:.2f}/month (flat)"
+    )
     st.markdown(f"""
     <div class="info-box">
-        Fixed charge (TOD): <b>₹{TOD_FIXED_PER_KW:.2f}/kW/month</b><br>
-        <span class="note-line">{TOD_FIXED_NOTE}</span><br>
-        Municipal corporation surcharge: <b>₹{MUNICIPAL_SURCHARGE:.2f}/month</b><br>
+        Residential fixed: <b>{fixed_line}</b><br>
+        <span class="note-line">{RESIDENTIAL_FIXED_NOTE}</span><br>
+        Municipal surcharge: <b>₹{MUNICIPAL_SURCHARGE:.2f}/month</b><br>
         <span class="note-line">{MUNICIPAL_SURCHARGE_NOTE}</span>
-        {f'<br>Effective from: <b>{MUNICIPAL_SURCHARGE_EFFECTIVE_FROM}</b><br>' if MUNICIPAL_SURCHARGE_EFFECTIVE_FROM else '<br>'}
-        Total fixed (at {DEFAULT_CONNECTED_LOAD_KW:g} kW): <b>₹{total_fixed_default:.2f}</b><br>
-        <span class="note-line">Payable even at zero consumption</span>
+        {f'<br>Effective from: <b>{MUNICIPAL_SURCHARGE_EFFECTIVE_FROM}</b>' if MUNICIPAL_SURCHARGE_EFFECTIVE_FROM else ''}
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("**Other Charges**")
+    st.markdown("**Direct / flat charges**")
     st.markdown(f"""
     <div class="info-box">
-        Security deposit arrears: <b>₹{SECURITY_DEPOSIT_ARREARS:,.2f}</b><br>
-        <span class="note-line">{SECURITY_DEPOSIT_NOTE or f'Outstanding SD (₹{SECURITY_DEPOSIT_HELD:,.2f} held); interest ₹{SECURITY_DEPOSIT_INTEREST:.2f}'}</span><br>
-        Delayed payment charge: <b>₹{DELAYED_PAYMENT_CHARGE:.2f}</b>
-        {f' → ₹{DELAYED_PAYMENT_CHARGE_AFTER:.2f} after {DELAYED_PAYMENT_LATE_DEADLINE}' if DELAYED_PAYMENT_CHARGE_AFTER else ''}<br>
-        <span class="note-line">{DELAYED_PAYMENT_NOTE or (f'₹{DELAYED_PAYMENT_CHARGE:.0f} by {DELAYED_PAYMENT_EARLY_DEADLINE}' if DELAYED_PAYMENT_EARLY_DEADLINE else '')}</span>
+        Wheeling: <b>₹{WHEELING_RATE_PER_UNIT:.2f}/unit</b><br>
+        <span class="note-line">{WHEELING_NOTE}</span><br>
+        Electricity duty: <b>{ELECTRICITY_DUTY_PERCENT:.0f}%</b><br>
+        <span class="note-line">{ELECTRICITY_DUTY_NOTE}</span><br>
+        Prompt discount: <b>{PROMPT_PAYMENT_DISCOUNT_PERCENT:.0f}%</b> of duty base<br>
+        After-due surcharge: <b>₹{AFTER_DUE_SURCHARGE:.2f}</b>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("**Footnote items**")
+    st.markdown(f"""
+    <div class="info-box">
+        SD held: <b>₹{SECURITY_DEPOSIT_HELD:,.2f}</b><br>
+        SD arrears: <b>₹{SECURITY_DEPOSIT_ARREARS:,.2f}</b><br>
+        SD interest: <b>₹{SECURITY_DEPOSIT_INTEREST:,.2f}</b><br>
+        <span class="note-line">{SECURITY_DEPOSIT_NOTE}</span><br>
+        Digital discount: <b>₹{DIGITAL_PAYMENT_DISCOUNT:.2f}</b>
     </div>
     """, unsafe_allow_html=True)
 
 
-# ── Tabs ────────────────────────────────────────────────────────────────────────
 tab_calc, tab_history = st.tabs(["🧮 Calculate Bill", "📂 Bill History"])
 
-# ────────────────────────────────────────────────────────────────────────────────
-# TAB 1: Calculator
-# ────────────────────────────────────────────────────────────────────────────────
 with tab_calc:
     col_form, col_result = st.columns([1, 1.4], gap="large")
 
     with col_form:
         st.markdown("### 📝 Customer Details")
 
-        # Apply next suggested number after a successful save (must run before widget)
         if "_pending_bill_no" in st.session_state:
             st.session_state["bill_no_input"] = st.session_state.pop("_pending_bill_no")
         if "bill_no_input" not in st.session_state:
@@ -215,8 +225,32 @@ with tab_calc:
             else:
                 st.caption("Available — will be saved against this bill in the database.")
 
-        name = st.text_input("Customer Name", placeholder="e.g. Rahul Sharma")
+        name = st.text_input("Customer Name", placeholder="e.g. Sunanda Pralhad Bonde")
         phone = st.text_input("Phone Number", placeholder="e.g. +919876543210")
+
+        from datetime import datetime as _dt
+        _now = _dt.now()
+        _month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ]
+        bm_col, by_col = st.columns(2)
+        with bm_col:
+            bill_month_name = st.selectbox(
+                "Bill Month",
+                options=_month_names,
+                index=_now.month - 1,
+            )
+            bill_month = _month_names.index(bill_month_name) + 1
+        with by_col:
+            bill_year = st.number_input(
+                "Bill Year",
+                min_value=2000,
+                max_value=2100,
+                value=_now.year,
+                step=1,
+            )
+
         units = st.number_input(
             "Units Consumed (kWh)", min_value=0, max_value=99999, value=0, step=1
         )
@@ -224,14 +258,20 @@ with tab_calc:
             "Connected Load (kW)",
             min_value=0.0,
             max_value=100.0,
-            value=float(DEFAULT_CONNECTED_LOAD_KW),
+            value=0.0,
             step=0.5,
-            help=f"TOD fixed = ₹{TOD_FIXED_PER_KW:.0f} × connected load (kW)",
+            help="Informational for LT-I flat fixed mode; used when fixed_charge_mode=per_kw",
+        )
+        net_adj = st.number_input(
+            "Net Adjustment (credit negative)",
+            value=float(DEFAULT_NET_ADJUSTMENT),
+            step=0.01,
+            help="निव्वळ थकबाकी/जमा — Flat2-May example: -2.85",
         )
 
         st.markdown("#### Optional bill items")
         include_sd = st.checkbox(
-            f"Include Security Deposit Arrears (₹{SECURITY_DEPOSIT_ARREARS:,.2f})",
+            f"Include Security Deposit Arrears in total (₹{SECURITY_DEPOSIT_ARREARS:,.2f})",
             value=INCLUDE_SECURITY_DEPOSIT_BY_DEFAULT,
         )
         include_dpc = st.checkbox(
@@ -266,10 +306,16 @@ with tab_calc:
                     connected_load_kw=connected_kw,
                     include_security_deposit=include_sd,
                     include_delayed_payment=include_dpc,
+                    net_adjustment=net_adj,
+                    bill_month=int(bill_month),
+                    bill_year=int(bill_year),
                     bill_no=entered_bill_no,
                 )
 
-                st.markdown(f"### 📊 Bill Summary — `{bill.bill_no}`")
+                st.markdown(
+                    f"### 📊 Bill Summary — `{bill.bill_no}` "
+                    f"({bill.bill_period})"
+                )
 
                 slab_html = ""
                 for s in bill.slab_details:
@@ -279,7 +325,8 @@ with tab_calc:
                         f"<td style='text-align:center'>{s.units}</td>"
                         f"<td style='text-align:center'>₹{s.energy_rate:.2f}</td>"
                         f"<td style='text-align:center'>₹{s.fac_rate:.3f}</td>"
-                        f"<td style='text-align:right'><b>₹{s.amount:.2f}</b></td>"
+                        f"<td style='text-align:right'>₹{s.energy_amount:.2f}</td>"
+                        f"<td style='text-align:right'>₹{s.fac_amount:.2f}</td>"
                         f"</tr>"
                     )
 
@@ -287,8 +334,9 @@ with tab_calc:
                 <table class="slab-table">
                     <tr>
                         <th>Slab</th><th>Units</th>
-                        <th>Energy</th><th>FAC</th>
-                        <th style="text-align:right">Amount</th>
+                        <th>Energy ₹</th><th>FAC ₹</th>
+                        <th style="text-align:right">Energy Amt</th>
+                        <th style="text-align:right">FAC Amt</th>
                     </tr>
                     {slab_html}
                 </table>
@@ -298,70 +346,49 @@ with tab_calc:
 
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="label">Bill Number</p>
-                        <p class="value" style="font-size:1.1rem">{bill.bill_no}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="label">Energy Charge</p>
-                        <p class="value">₹{bill.energy_charge:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="label">FAC Charge</p>
-                        <p class="value">₹{bill.fac_charge:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="label">Fixed Charge (TOD)</p>
-                        <p class="value">₹{bill.tod_fixed_charge:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                with c2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="label">Municipal Surcharge</p>
-                        <p class="value">₹{bill.municipal_surcharge:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="label">Total Fixed Charge</p>
-                        <p class="value">₹{bill.fixed_charge:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if bill.security_deposit_arrears > 0:
+                    for label, value in [
+                        ("Energy Charge", bill.energy_charge),
+                        ("FAC Charge", bill.fac_charge),
+                        ("Fixed Charge", bill.fixed_charge),
+                        ("Wheeling Charge", bill.wheeling_charge),
+                    ]:
                         st.markdown(f"""
                         <div class="metric-card">
-                            <p class="label">Security Deposit Arrears</p>
-                            <p class="value">₹{bill.security_deposit_arrears:,.2f}</p>
+                            <p class="label">{label}</p>
+                            <p class="value">₹{value:,.2f}</p>
                         </div>
                         """, unsafe_allow_html=True)
-                    if bill.delayed_payment_charge > 0:
+                with c2:
+                    for label, value in [
+                        ("Duty Base", bill.duty_base),
+                        (f"Electricity Duty ({bill.electricity_duty_percent:.0f}%)", bill.electricity_duty),
+                        ("Current Bill", bill.current_bill),
+                        ("Net Adjustment", bill.net_adjustment),
+                    ]:
                         st.markdown(f"""
                         <div class="metric-card">
-                            <p class="label">Delayed Payment Charge</p>
-                            <p class="value">₹{bill.delayed_payment_charge:,.2f}</p>
+                            <p class="label">{label}</p>
+                            <p class="value">₹{value:,.2f}</p>
                         </div>
                         """, unsafe_allow_html=True)
 
                 st.markdown(f"""
                 <div class="total-card">
-                    <p class="label">Total Amount Payable</p>
+                    <p class="label">Rounded Bill Payable — {bill.bill_period}</p>
                     <p class="value">₹{bill.total:,.2f}</p>
                     <p style="margin-top:0.6rem;font-size:0.95rem;opacity:0.9;">
-                        Bill No: <b>{bill.bill_no}</b>
-                        &nbsp;|&nbsp; Due Date: <b>{bill.due_date}</b>
-                        &nbsp;|&nbsp; Load: <b>{bill.connected_load_kw:g} kW</b>
+                        Prompt by <b>{bill.prompt_due_date}</b>: ₹{bill.prompt_payable:,.2f}
+                        &nbsp;|&nbsp; After <b>{bill.due_date}</b>: ₹{bill.after_due_payable:,.2f}
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
+
+                st.caption(
+                    f"Footnote — SD held ₹{bill.security_deposit_held:,.2f} | "
+                    f"SD arrears ₹{bill.security_deposit_arrears:,.2f} | "
+                    f"SD interest ₹{bill.security_deposit_interest:,.2f} | "
+                    f"Digital discount ₹{bill.digital_payment_discount:,.2f}"
+                )
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -461,14 +488,11 @@ with tab_calc:
             st.markdown("""
             <div style="text-align:center; padding:4rem 2rem; color:#999;">
                 <p style="font-size:3rem;">⚡</p>
-                <p style="font-size:1.1rem;">Enter customer details and click <b>Generate Bill</b> to see the breakdown.</p>
+                <p style="font-size:1.1rem;">Enter customer details and click <b>Generate Bill</b> to see the MSEDCL breakdown.</p>
             </div>
             """, unsafe_allow_html=True)
 
 
-# ────────────────────────────────────────────────────────────────────────────────
-# TAB 2: Bill History (from SQLite database)
-# ────────────────────────────────────────────────────────────────────────────────
 with tab_history:
     st.markdown("### 📂 Bill History (Database)")
 
@@ -497,7 +521,7 @@ with tab_history:
             )
         with search_col2:
             search_name = st.text_input(
-                "Search by customer name", placeholder="e.g. Rahul", key="search_name"
+                "Search by customer name", placeholder="e.g. Sunanda", key="search_name"
             )
         with search_col3:
             search_phone = st.text_input(
@@ -514,7 +538,6 @@ with tab_history:
         else:
             bills = get_all_bills()
 
-        # Exact bill-number lookup panel
         if search_bill_no and search_bill_no.strip():
             exact = get_bill_by_no(search_bill_no.strip())
             if exact:
@@ -528,81 +551,68 @@ with tab_history:
             import pandas as pd
             df = pd.DataFrame(bills)
             display_cols = [
-                "bill_no", "created_at", "due_date", "customer_name",
-                "phone", "units_consumed", "energy_charge", "fac_charge",
-                "fixed_charge", "total", "whatsapp_sent",
+                "bill_no", "bill_month", "bill_year", "created_at",
+                "prompt_due_date", "due_date",
+                "customer_name", "units_consumed", "energy_charge", "fac_charge",
+                "wheeling_charge", "electricity_duty", "total", "prompt_payable",
+                "after_due_payable", "whatsapp_sent",
             ]
             df_display = df[[c for c in display_cols if c in df.columns]].copy()
-            df_display["whatsapp_sent"] = df_display["whatsapp_sent"].map(
-                {1: "Yes", 0: "No"}
-            )
-            rename = {
-                "bill_no": "Bill No",
-                "created_at": "Created",
-                "due_date": "Due Date",
-                "customer_name": "Customer",
-                "phone": "Phone",
-                "units_consumed": "Units (kWh)",
-                "energy_charge": "Energy (Rs.)",
-                "fac_charge": "FAC (Rs.)",
-                "fixed_charge": "Fixed (Rs.)",
-                "total": "Total (Rs.)",
-                "whatsapp_sent": "WA Sent",
-            }
-            df_display = df_display.rename(columns=rename)
+            if "bill_month" in df_display.columns and "bill_year" in df_display.columns:
+                _names = [
+                    "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                ]
+
+                def _period(row):
+                    m = int(row.get("bill_month") or 0)
+                    y = int(row.get("bill_year") or 0)
+                    if 1 <= m <= 12 and y:
+                        return f"{_names[m]} {y}"
+                    return ""
+
+                df_display.insert(
+                    1,
+                    "bill_period",
+                    df_display.apply(_period, axis=1),
+                )
+                df_display = df_display.drop(columns=["bill_month", "bill_year"])
+            if "whatsapp_sent" in df_display.columns:
+                df_display["whatsapp_sent"] = df_display["whatsapp_sent"].map(
+                    {1: "Yes", 0: "No"}
+                )
             st.dataframe(df_display, use_container_width=True, hide_index=True)
 
             st.markdown("---")
             st.markdown("#### Bill Details")
             for b in bills:
                 wa_badge = " ✅" if b["whatsapp_sent"] else ""
+                m = int(b.get("bill_month") or 0)
+                y = int(b.get("bill_year") or 0)
+                _names = [
+                    "", "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December",
+                ]
+                period = f"{_names[m]} {y}" if 1 <= m <= 12 and y else ""
+                period_label = f" — {period}" if period else ""
                 with st.expander(
-                    f"📄 {b['bill_no']}  —  {b['customer_name']}  —  "
+                    f"📄 {b['bill_no']}{period_label}  —  {b['customer_name']}  —  "
                     f"Rs.{b['total']:,.2f}{wa_badge}"
                 ):
-                    dc0, dc1, dc2, dc3 = st.columns(4)
-                    with dc0:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <p class="label">Bill Number</p>
-                            <p class="value" style="font-size:1rem">{b['bill_no']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with dc1:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <p class="label">Created</p>
-                            <p class="value" style="font-size:1rem">{b['created_at']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with dc2:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <p class="label">Due Date</p>
-                            <p class="value" style="font-size:1rem">{b['due_date']}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    with dc3:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <p class="label">Units Consumed</p>
-                            <p class="value">{b['units_consumed']} kWh</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    fac = b.get("fac_charge") or 0
-                    tod = b.get("tod_fixed_charge") or 0
-                    muni = b.get("municipal_surcharge") or 0
-                    sd = b.get("security_deposit_arrears") or 0
-                    dpc = b.get("delayed_payment_charge") or 0
+                    if period:
+                        st.markdown(f"**Bill Period:** {period}")
                     st.markdown(
                         f"**Energy:** Rs.{b['energy_charge']:,.2f} &nbsp;|&nbsp; "
-                        f"**FAC:** Rs.{fac:,.2f} &nbsp;|&nbsp; "
-                        f"**TOD Fixed:** Rs.{tod:,.2f} &nbsp;|&nbsp; "
-                        f"**Municipal:** Rs.{muni:,.2f} &nbsp;|&nbsp; "
-                        f"**SD Arrears:** Rs.{sd:,.2f} &nbsp;|&nbsp; "
-                        f"**DPC:** Rs.{dpc:,.2f} &nbsp;|&nbsp; "
+                        f"**FAC:** Rs.{b.get('fac_charge', 0):,.2f} &nbsp;|&nbsp; "
+                        f"**Wheeling:** Rs.{b.get('wheeling_charge', 0):,.2f} &nbsp;|&nbsp; "
+                        f"**Duty:** Rs.{b.get('electricity_duty', 0):,.2f} &nbsp;|&nbsp; "
+                        f"**Fixed:** Rs.{b['fixed_charge']:,.2f} &nbsp;|&nbsp; "
                         f"**Total: Rs.{b['total']:,.2f}**"
+                    )
+                    st.caption(
+                        f"Prompt ₹{b.get('prompt_payable', 0):,.2f} by "
+                        f"{b.get('prompt_due_date') or '—'} | "
+                        f"After-due ₹{b.get('after_due_payable', 0):,.2f}"
                     )
 
                     fdl1, fdl2 = st.columns(2)

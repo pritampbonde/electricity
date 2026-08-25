@@ -1,8 +1,9 @@
 {
   "tariff_name": "LT-I Residential",
-  "tariff_details": "tariff-details",
-  "tariff_order": "MYT Order 217/2024",
-  "due_days": 15,
+  "tariff_details": "MSEDCL LT-I Res 1-Phase (MYT Order 217/2024)",
+  "tariff_order": "MYT Order 217/2024 + Case 75/2025 (eff. 01-04-2026)",
+  "due_days": 20,
+  "prompt_due_days": 10,
   "gst_percent": 0.0,
 
   "slabs": [
@@ -10,54 +11,72 @@
       "label": "0–100",
       "up_to_units": 100,
       "energy_rate": 3.96,
-      "fac_rate": 0.200
+      "fac_rate": 0.350
     },
     {
       "label": "101–300",
       "up_to_units": 300,
       "energy_rate": 10.80,
-      "fac_rate": 0.400
+      "fac_rate": 0.650
     },
     {
       "label": "301–500",
       "up_to_units": 500,
       "energy_rate": 15.03,
-      "fac_rate": 0.550
+      "fac_rate": 0.850
     },
     {
       "label": "501–1000",
       "up_to_units": 1000,
       "energy_rate": 17.53,
-      "fac_rate": 0.600
+      "fac_rate": 0.950
     },
     {
       "label": "Above 1000",
       "up_to_units": null,
       "energy_rate": 17.53,
-      "fac_rate": 0.600
+      "fac_rate": 0.950
     }
   ],
 
   "fixed_charges": {
+    "residential_fixed": 130.00,
+    "residential_fixed_note": "₹130/month fixed charge for LT-I Residential (not multiplied by kW on 1-phase residential bills)",
+    "fixed_charge_mode": "flat",
     "tod_per_kw": 130.00,
-    "tod_note": "₹130 per kW of connected load per month, per MYT Order 217/2024",
-    "default_connected_load_kw": 1.0,
+    "tod_note": "₹130 per kW/month applies when fixed_charge_mode is per_kw",
+    "default_connected_load_kw": 4.0,
     "municipal_surcharge": 10.00,
     "municipal_surcharge_note": "Additional fixed charge for MC-area consumers, effective 01-07-2025",
     "municipal_surcharge_effective_from": "01-07-2025"
   },
 
+  "direct_charges": {
+    "wheeling_rate_per_unit": 1.60,
+    "wheeling_note": "Flat wheeling charge (वहन आकार) @ ₹1.60 per unit",
+    "electricity_duty_percent": 16.0,
+    "electricity_duty_note": "16% on (Fixed + Energy + Wheeling + FAC)",
+    "prompt_payment_discount_percent": 1.0,
+    "prompt_payment_discount_note": "1% of (Fixed + Energy + Wheeling + FAC); prompt payable rounded to nearest ₹10",
+    "after_due_surcharge": 50.00,
+    "after_due_surcharge_note": "Added to rounded bill when paid after the late due date",
+    "digital_payment_discount": 9.36,
+    "digital_payment_discount_note": "Optional digital payment discount footnote"
+  },
+
   "other_charges": {
     "security_deposit_arrears": 3000.00,
     "security_deposit_held": 2190.00,
-    "security_deposit_interest": 4.87,
-    "security_deposit_note": "Outstanding SD (₹2,190 currently held); interest on SD ₹4.87",
-    "delayed_payment_charge": 10.00,
-    "delayed_payment_charge_after": 20.00,
-    "delayed_payment_early_deadline": "31-08-2026",
-    "delayed_payment_late_deadline": "11-09-2026",
-    "delayed_payment_note": "₹10 by 31-08-2026 → ₹20 after 11-09-2026",
-    "include_security_deposit_by_default": true,
-    "include_delayed_payment_by_default": true
+    "security_deposit_interest": 54.27,
+    "security_deposit_note": "Outstanding SD (₹2,190 currently held); interest on SD ₹54.27 — footnote only unless included",
+    "delayed_payment_charge": 0.00,
+    "delayed_payment_charge_after": 0.00,
+    "delayed_payment_early_deadline": "",
+    "delayed_payment_late_deadline": "",
+    "delayed_payment_note": "After-due amount uses after_due_surcharge on the rounded bill",
+    "include_security_deposit_by_default": false,
+    "include_delayed_payment_by_default": false,
+    "default_net_adjustment": 0.00,
+    "default_net_adjustment_note": "Credit/debit adjustment (निव्वळ थकबाकी/जमा); Flat2-May example was -2.85"
   }
 }

@@ -32,24 +32,17 @@ def _format_message(bill: BillResult, bill_no: str = "") -> str:
         "",
         "Here is your electricity bill summary:",
         f"  Bill No         : {resolved}",
+        f"  Bill Period     : {bill.bill_period}",
         f"  Units Consumed  : {bill.units_consumed} kWh",
         f"  Connected Load  : {bill.connected_load_kw:g} kW",
         f"  Energy Charge   : Rs.{bill.energy_charge:.2f}",
         f"  FAC Charge      : Rs.{bill.fac_charge:.2f}",
-        f"  Fixed (TOD+MC)  : Rs.{bill.fixed_charge:.2f}",
-    ]
-    if bill.security_deposit_arrears > 0:
-        lines.append(
-            f"  SD Arrears      : Rs.{bill.security_deposit_arrears:.2f}"
-        )
-    if bill.delayed_payment_charge > 0:
-        lines.append(
-            f"  Delayed Payment: Rs.{bill.delayed_payment_charge:.2f}"
-        )
-    if bill.gst_percent > 0:
-        lines.append(f"  GST ({bill.gst_percent}%)      : Rs.{bill.gst_amount:.2f}")
-    lines += [
-        f"  *Total Amount   : Rs.{bill.total:.2f}*",
+        f"  Wheeling        : Rs.{bill.wheeling_charge:.2f}",
+        f"  Fixed Charge    : Rs.{bill.fixed_charge:.2f}",
+        f"  Elec. Duty      : Rs.{bill.electricity_duty:.2f}",
+        f"  *Rounded Bill   : Rs.{bill.total:.2f}*",
+        f"  Prompt payable  : Rs.{bill.prompt_payable:.2f} by {bill.prompt_due_date}",
+        f"  After due date  : Rs.{bill.after_due_payable:.2f}",
         "",
         f"Please pay before *{bill.due_date}* to avoid late fees.",
         f"Reference Bill No: *{resolved}*",

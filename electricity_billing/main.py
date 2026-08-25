@@ -46,11 +46,31 @@ def _create_bill() -> None:
         return
     units = _input_int("  Units consumed (kWh): ")
     try:
-        load_raw = input("  Connected load kW [1]: ").strip()
-        connected_kw = float(load_raw) if load_raw else 1.0
+        load_raw = input("  Connected load kW [4]: ").strip()
+        connected_kw = float(load_raw) if load_raw else 4.0
     except ValueError:
-        print("  Invalid connected load; using 1 kW.")
-        connected_kw = 1.0
+        print("  Invalid connected load; using 4 kW.")
+        connected_kw = 4.0
+    try:
+        adj_raw = input("  Net adjustment (credit as negative) [0]: ").strip()
+        net_adj = float(adj_raw) if adj_raw else 0.0
+    except ValueError:
+        print("  Invalid adjustment; using 0.")
+        net_adj = 0.0
+    from datetime import datetime as _dt
+    _now = _dt.now()
+    try:
+        month_raw = input(f"  Bill month 1-12 [{_now.month}]: ").strip()
+        bill_month = int(month_raw) if month_raw else _now.month
+    except ValueError:
+        print("  Invalid month; using current month.")
+        bill_month = _now.month
+    try:
+        year_raw = input(f"  Bill year [{_now.year}]: ").strip()
+        bill_year = int(year_raw) if year_raw else _now.year
+    except ValueError:
+        print("  Invalid year; using current year.")
+        bill_year = _now.year
 
     from database import suggest_next_bill_number, bill_number_exists
     suggested = suggest_next_bill_number()
@@ -66,6 +86,9 @@ def _create_bill() -> None:
             phone,
             units,
             connected_load_kw=connected_kw,
+            net_adjustment=net_adj,
+            bill_month=bill_month,
+            bill_year=bill_year,
             bill_no=bill_no_custom,
         )
     except ValueError as exc:
@@ -111,7 +134,14 @@ def _view_previous_bills() -> None:
 
     for i, b in enumerate(bills, 1):
         wa = " [WA sent]" if b["whatsapp_sent"] else ""
-        print(f"  {i}. {b['bill_no']}  |  {b['customer_name']:<20s}  |  "
+        m = int(b.get("bill_month") or 0)
+        y = int(b.get("bill_year") or 0)
+        _names = [
+            "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ]
+        period = f"{_names[m]} {y}" if 1 <= m <= 12 and y else "—"
+        print(f"  {i}. {b['bill_no']}  |  {period:<12s}  |  {b['customer_name']:<20s}  |  "
               f"{b['units_consumed']:>5d} kWh  |  Rs.{b['total']:>10.2f}  |  "
               f"{b['created_at']}{wa}")
 
@@ -122,8 +152,16 @@ def _view_previous_bills() -> None:
     try:
         idx = int(choice) - 1
         b = bills[idx]
+        m = int(b.get("bill_month") or 0)
+        y = int(b.get("bill_year") or 0)
+        _names = [
+            "", "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ]
+        period = f"{_names[m]} {y}" if 1 <= m <= 12 and y else "N/A"
         print(f"\n  {'=' * 50}")
         print(f"  Bill No         : {b['bill_no']}")
+        print(f"  Bill Period     : {period}")
         print(f"  Created         : {b['created_at']}")
         print(f"  Due Date        : {b['due_date']}")
         print(f"  Customer        : {b['customer_name']}")
@@ -132,17 +170,15 @@ def _view_previous_bills() -> None:
         print(f"  Connected Load  : {b.get('connected_load_kw', 1)} kW")
         print(f"  Energy Charge   : Rs.{b['energy_charge']:.2f}")
         print(f"  FAC Charge      : Rs.{b.get('fac_charge', 0):.2f}")
-        print(f"  TOD Fixed       : Rs.{b.get('tod_fixed_charge', 0):.2f}")
-        print(f"  Municipal Surch.: Rs.{b.get('municipal_surcharge', 0):.2f}")
-        print(f"  Total Fixed     : Rs.{b['fixed_charge']:.2f}")
-        if b.get("security_deposit_arrears", 0):
-            print(f"  SD Arrears      : Rs.{b['security_deposit_arrears']:.2f}")
-        if b.get("delayed_payment_charge", 0):
-            print(f"  Delayed Payment: Rs.{b['delayed_payment_charge']:.2f}")
-        if b["gst_percent"] > 0:
-            print(f"  GST ({b['gst_percent']}%)      : Rs.{b['gst_amount']:.2f}")
-        print(f"  Subtotal        : Rs.{b['subtotal']:.2f}")
-        print(f"  TOTAL           : Rs.{b['total']:.2f}")
+        print(f"  Wheeling        : Rs.{b.get('wheeling_charge', 0):.2f}")
+        print(f"  Fixed Charge    : Rs.{b['fixed_charge']:.2f}")
+        print(f"  Elec. Duty      : Rs.{b.get('electricity_duty', 0):.2f}")
+        print(f"  Current Bill    : Rs.{b.get('current_bill', b['subtotal']):.2f}")
+        print(f"  Net Adjustment  : Rs.{b.get('net_adjustment', 0):.2f}")
+        print(f"  Rounded Total   : Rs.{b['total']:.2f}")
+        print(f"  Prompt Payable  : Rs.{b.get('prompt_payable', 0):.2f} by {b.get('prompt_due_date', '')}")
+        print(f"  After-Due Pay   : Rs.{b.get('after_due_payable', 0):.2f}")
+        print(f"  SD Held/Arrears : Rs.{b.get('security_deposit_held', 0):.2f} / Rs.{b.get('security_deposit_arrears', 0):.2f}")
         print(f"  TXT file        : {b['txt_path'] or 'N/A'}")
         print(f"  PDF file        : {b['pdf_path'] or 'N/A'}")
         print(f"  WhatsApp sent   : {'Yes' if b['whatsapp_sent'] else 'No'}")
