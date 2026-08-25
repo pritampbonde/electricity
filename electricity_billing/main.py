@@ -45,28 +45,53 @@ def _create_bill() -> None:
         print("  Phone number cannot be empty.")
         return
     units = _input_int("  Units consumed (kWh): ")
+    try:
+        load_raw = input("  Connected load kW [1]: ").strip()
+        connected_kw = float(load_raw) if load_raw else 1.0
+    except ValueError:
+        print("  Invalid connected load; using 1 kW.")
+        connected_kw = 1.0
+
+    from database import suggest_next_bill_number, bill_number_exists
+    suggested = suggest_next_bill_number()
+    bill_no_raw = input(f"  Bill number [{suggested}]: ").strip()
+    bill_no_custom = bill_no_raw or suggested
+    if bill_number_exists(bill_no_custom):
+        print(f"  Error: Bill number '{bill_no_custom}' already exists in the database.")
+        return
 
     try:
-        bill = calculate_bill(name, phone, units)
+        bill = calculate_bill(
+            name,
+            phone,
+            units,
+            connected_load_kw=connected_kw,
+            bill_no=bill_no_custom,
+        )
     except ValueError as exc:
         print(f"  Error: {exc}")
         return
 
-    bill_no, txt_path, bill_text = save_bill_txt(bill)
+    try:
+        bill_no, txt_path, bill_text = save_bill_txt(bill, bill_no=bill.bill_no)
+    except ValueError as exc:
+        print(f"  Error: {exc}")
+        return
     print(f"\n{bill_text}")
+    print(f"  Bill Number      : {bill.bill_no}")
     print(f"  Text bill saved  → {txt_path}")
 
     pdf_path = ""
     try:
-        _, pdf_path = save_bill_pdf(bill, bill_no)
+        _, pdf_path = save_bill_pdf(bill, bill_no=bill.bill_no)
         print(f"  PDF  bill saved  → {pdf_path}")
     except Exception as exc:
         print(f"  (PDF generation skipped: {exc})")
 
-    print(f"  Saved to database ✓")
+    print(f"  Saved to database ✓  (bill_no={bill.bill_no})")
 
     _last_bill = bill
-    _last_bill_no = bill_no
+    _last_bill_no = bill.bill_no
     _last_pdf_path = pdf_path
 
 
@@ -104,10 +129,16 @@ def _view_previous_bills() -> None:
         print(f"  Customer        : {b['customer_name']}")
         print(f"  Phone           : {b['phone']}")
         print(f"  Units Consumed  : {b['units_consumed']} kWh")
+        print(f"  Connected Load  : {b.get('connected_load_kw', 1)} kW")
         print(f"  Energy Charge   : Rs.{b['energy_charge']:.2f}")
-        print(f"  Fixed Charge    : Rs.{b['fixed_charge']:.2f}")
-        print(f"  Meter Rent      : Rs.{b['meter_rent']:.2f}")
-        print(f"  Elec. Duty ({b['electricity_duty_percent']}%): Rs.{b['electricity_duty']:.2f}")
+        print(f"  FAC Charge      : Rs.{b.get('fac_charge', 0):.2f}")
+        print(f"  TOD Fixed       : Rs.{b.get('tod_fixed_charge', 0):.2f}")
+        print(f"  Municipal Surch.: Rs.{b.get('municipal_surcharge', 0):.2f}")
+        print(f"  Total Fixed     : Rs.{b['fixed_charge']:.2f}")
+        if b.get("security_deposit_arrears", 0):
+            print(f"  SD Arrears      : Rs.{b['security_deposit_arrears']:.2f}")
+        if b.get("delayed_payment_charge", 0):
+            print(f"  Delayed Payment: Rs.{b['delayed_payment_charge']:.2f}")
         if b["gst_percent"] > 0:
             print(f"  GST ({b['gst_percent']}%)      : Rs.{b['gst_amount']:.2f}")
         print(f"  Subtotal        : Rs.{b['subtotal']:.2f}")

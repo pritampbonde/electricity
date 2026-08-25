@@ -24,25 +24,35 @@ from billing_config import (
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _format_message(bill: BillResult, bill_no: str) -> str:
+def _format_message(bill: BillResult, bill_no: str = "") -> str:
     """Build a WhatsApp-friendly bill summary message."""
+    resolved = (bill_no or bill.bill_no or "").strip()
     lines = [
         f"Hello {bill.customer_name},",
         "",
         "Here is your electricity bill summary:",
-        f"  Bill No         : {bill_no}",
+        f"  Bill No         : {resolved}",
         f"  Units Consumed  : {bill.units_consumed} kWh",
+        f"  Connected Load  : {bill.connected_load_kw:g} kW",
         f"  Energy Charge   : Rs.{bill.energy_charge:.2f}",
-        f"  Fixed Charge    : Rs.{bill.fixed_charge:.2f}",
-        f"  Meter Rent      : Rs.{bill.meter_rent:.2f}",
-        f"  Elec. Duty({bill.electricity_duty_percent}%): Rs.{bill.electricity_duty:.2f}",
+        f"  FAC Charge      : Rs.{bill.fac_charge:.2f}",
+        f"  Fixed (TOD+MC)  : Rs.{bill.fixed_charge:.2f}",
     ]
+    if bill.security_deposit_arrears > 0:
+        lines.append(
+            f"  SD Arrears      : Rs.{bill.security_deposit_arrears:.2f}"
+        )
+    if bill.delayed_payment_charge > 0:
+        lines.append(
+            f"  Delayed Payment: Rs.{bill.delayed_payment_charge:.2f}"
+        )
     if bill.gst_percent > 0:
         lines.append(f"  GST ({bill.gst_percent}%)      : Rs.{bill.gst_amount:.2f}")
     lines += [
         f"  *Total Amount   : Rs.{bill.total:.2f}*",
         "",
         f"Please pay before *{bill.due_date}* to avoid late fees.",
+        f"Reference Bill No: *{resolved}*",
         "Thank you!",
     ]
     return "\n".join(lines)
@@ -116,28 +126,30 @@ def send_bill_twilio(bill: BillResult, bill_no: str, pdf_path: str) -> str:
     if not from_number.startswith("whatsapp:"):
         from_number = f"whatsapp:{from_number}"
 
+    resolved = (bill_no or bill.bill_no or "").strip()
     pdf_url = _upload_pdf_to_fileio(pdf_path)
 
     client = TwilioClient(sid, token)
     message = client.messages.create(
         from_=from_number,
         to=to_number,
-        body=_format_message(bill, bill_no),
+        body=_format_message(bill, resolved),
         media_url=[pdf_url],
     )
     return f"Sent! Twilio SID: {message.sid}"
 
 
-def send_bill_whatsapp(bill: BillResult, bill_no: str, pdf_path: str = "") -> str:
+def send_bill_whatsapp(bill: BillResult, bill_no: str = "", pdf_path: str = "") -> str:
     """Send bill via WhatsApp — Twilio (with PDF) or wa.me fallback (text only).
 
     Returns a status/URL string.
     """
+    resolved = (bill_no or bill.bill_no or "").strip()
     if is_twilio_configured() and pdf_path and os.path.isfile(pdf_path):
-        return send_bill_twilio(bill, bill_no, pdf_path)
+        return send_bill_twilio(bill, resolved, pdf_path)
 
     phone = _normalize_phone(bill.phone)
-    message = _format_message(bill, bill_no)
+    message = _format_message(bill, resolved)
     encoded_msg = urllib.parse.quote(message)
     url = f"https://wa.me/{phone}?text={encoded_msg}"
     webbrowser.open(url)
@@ -145,9 +157,10 @@ def send_bill_whatsapp(bill: BillResult, bill_no: str, pdf_path: str = "") -> st
     return url
 
 
-def get_whatsapp_url(bill: BillResult, bill_no: str) -> str:
+def get_whatsapp_url(bill: BillResult, bill_no: str = "") -> str:
     """Return the WhatsApp wa.me URL (text only, no attachment)."""
     phone = _normalize_phone(bill.phone)
-    message = _format_message(bill, bill_no)
+    resolved = (bill_no or bill.bill_no or "").strip()
+    message = _format_message(bill, resolved)
     encoded_msg = urllib.parse.quote(message)
     return f"https://wa.me/{phone}?text={encoded_msg}"
