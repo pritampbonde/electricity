@@ -8,6 +8,8 @@ Supports two modes:
      pre-filled (no PDF attachment, user sends manually).
 """
 
+from __future__ import annotations
+
 import os
 import urllib.parse
 import webbrowser

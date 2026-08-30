@@ -38,11 +38,18 @@ from billing_config import (
 )
 from database import (
     bill_number_exists,
+    delete_bill,
     get_all_bills,
     get_bill_by_no,
     get_bill_stats,
     search_bills,
     suggest_next_bill_number,
+)
+from whatsapp_sender import (
+    get_whatsapp_url,
+    is_twilio_configured,
+    send_bill_twilio,
+    send_bill_whatsapp,
 )
 
 st.set_page_config(
@@ -440,11 +447,6 @@ with tab_calc:
                 st.markdown("---")
                 st.markdown(f"### 📲 Send via WhatsApp — Bill `{bill.bill_no}`")
 
-                from whatsapp_sender import (
-                    is_twilio_configured, send_bill_twilio,
-                    get_whatsapp_url,
-                )
-
                 if is_twilio_configured():
                     st.markdown(
                         '<div class="info-box">Twilio is configured — '
@@ -541,11 +543,35 @@ with tab_history:
         if search_bill_no and search_bill_no.strip():
             exact = get_bill_by_no(search_bill_no.strip())
             if exact:
-                st.info(
-                    f"Exact DB match: **{exact['bill_no']}** — "
-                    f"{exact['customer_name']} — ₹{exact['total']:,.2f} "
-                    f"(due {exact['due_date']})"
-                )
+                match_col1, match_col2 = st.columns([3, 1])
+                with match_col1:
+                    st.info(
+                        f"Exact DB match: **{exact['bill_no']}** — "
+                        f"{exact['customer_name']} — ₹{exact['total']:,.2f} "
+                        f"(due {exact['due_date']})"
+                    )
+                with match_col2:
+                    with st.popover("🗑️ Delete Exact Match", use_container_width=True):
+                        st.markdown(f"**Delete bill `{exact['bill_no']}`?**")
+                        del_match_files = st.checkbox(
+                            "Also delete invoice files (.txt / .pdf)",
+                            value=True,
+                            key=f"del_files_exact_{exact['bill_no']}",
+                        )
+                        if st.button(
+                            "⚠️ Confirm Delete",
+                            type="primary",
+                            use_container_width=True,
+                            key=f"btn_del_exact_{exact['bill_no']}",
+                        ):
+                            if delete_bill(exact["bill_no"], delete_files=del_match_files):
+                                if st.session_state.get("last_bill_no") == exact["bill_no"]:
+                                    st.session_state.pop("last_bill", None)
+                                    st.session_state.pop("last_bill_no", None)
+                                st.toast(f"Bill {exact['bill_no']} deleted successfully!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete bill.")
 
         if bills:
             import pandas as pd
@@ -583,8 +609,51 @@ with tab_history:
                 )
             st.dataframe(df_display, use_container_width=True, hide_index=True)
 
+            # Prominent Quick Delete / Management Tool
             st.markdown("---")
-            st.markdown("#### Bill Details")
+            with st.container():
+                st.markdown("#### 🗑️ Quick Delete a Bill Record")
+                q_col1, q_col2, q_col3 = st.columns([2.5, 1.5, 1])
+                bill_options = [
+                    f"{b['bill_no']} | {b['customer_name']} | ₹{b['total']:,.2f} | {b.get('created_at', '')}"
+                    for b in bills
+                ]
+                with q_col1:
+                    selected_bill_str = st.selectbox(
+                        "Select bill to delete from database:",
+                        options=bill_options,
+                        key="quick_delete_selectbox",
+                        label_visibility="collapsed",
+                    )
+                with q_col2:
+                    quick_del_files = st.checkbox(
+                        "Delete .txt/.pdf files from disk",
+                        value=True,
+                        key="quick_del_files_cb",
+                    )
+                with q_col3:
+                    if selected_bill_str:
+                        target_bill_no = selected_bill_str.split(" | ")[0].strip()
+                        with st.popover("🗑️ Delete Bill", use_container_width=True):
+                            st.markdown(f"**Are you sure you want to delete `{target_bill_no}`?**")
+                            st.caption("This action is permanent and cannot be undone.")
+                            if st.button(
+                                "⚠️ Confirm Delete",
+                                type="primary",
+                                use_container_width=True,
+                                key="btn_quick_delete_confirm",
+                            ):
+                                if delete_bill(target_bill_no, delete_files=quick_del_files):
+                                    if st.session_state.get("last_bill_no") == target_bill_no:
+                                        st.session_state.pop("last_bill", None)
+                                        st.session_state.pop("last_bill_no", None)
+                                    st.toast(f"Bill {target_bill_no} deleted successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Failed to delete {target_bill_no}.")
+
+            st.markdown("---")
+            st.markdown("#### 📄 Bill Details & Downloads")
             for b in bills:
                 wa_badge = " ✅" if b["whatsapp_sent"] else ""
                 m = int(b.get("bill_month") or 0)
@@ -615,8 +684,8 @@ with tab_history:
                         f"After-due ₹{b.get('after_due_payable', 0):,.2f}"
                     )
 
-                    fdl1, fdl2 = st.columns(2)
-                    with fdl1:
+                    act_col1, act_col2, act_col3 = st.columns([1, 1, 1])
+                    with act_col1:
                         if b["txt_path"] and os.path.exists(b["txt_path"]):
                             with open(b["txt_path"], encoding="utf-8") as tf:
                                 st.download_button(
@@ -625,8 +694,9 @@ with tab_history:
                                     file_name=os.path.basename(b["txt_path"]),
                                     mime="text/plain",
                                     key=f"db_txt_{b['bill_no']}",
+                                    use_container_width=True,
                                 )
-                    with fdl2:
+                    with act_col2:
                         if b["pdf_path"] and os.path.exists(b["pdf_path"]):
                             with open(b["pdf_path"], "rb") as pf:
                                 st.download_button(
@@ -635,4 +705,29 @@ with tab_history:
                                     file_name=os.path.basename(b["pdf_path"]),
                                     mime="application/pdf",
                                     key=f"db_pdf_{b['bill_no']}",
+                                    use_container_width=True,
                                 )
+                    with act_col3:
+                        with st.popover("🗑️ Delete Bill", use_container_width=True):
+                            st.markdown(f"**Delete bill `{b['bill_no']}`?**")
+                            st.caption("This will remove the record from the database.")
+                            del_files = st.checkbox(
+                                "Also delete invoice files (.txt / .pdf)",
+                                value=True,
+                                key=f"del_files_{b['bill_no']}",
+                            )
+                            if st.button(
+                                "⚠️ Confirm Delete",
+                                type="primary",
+                                use_container_width=True,
+                                key=f"btn_del_{b['bill_no']}",
+                            ):
+                                if delete_bill(b["bill_no"], delete_files=del_files):
+                                    if st.session_state.get("last_bill_no") == b["bill_no"]:
+                                        st.session_state.pop("last_bill", None)
+                                        st.session_state.pop("last_bill_no", None)
+                                    st.toast(f"Bill {b['bill_no']} deleted successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete bill from database.")
+

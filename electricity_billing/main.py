@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Electricity Bill Calculator & WhatsApp Billing System — CLI entry point."""
 
+from __future__ import annotations
+
 import os
 import sys
 
@@ -8,7 +10,7 @@ from bill_calculator import calculate_bill, BillResult
 from bill_generator import save_bill_txt, save_bill_pdf
 from whatsapp_sender import send_bill_whatsapp, is_twilio_configured
 from billing_config import BILLS_DIR
-from database import get_all_bills, search_bills, get_bill_stats
+from database import get_all_bills, search_bills, get_bill_stats, delete_bill
 
 BANNER = r"""
  _____ _           _        _      _ _         ____  _ _ _ _
@@ -183,6 +185,13 @@ def _view_previous_bills() -> None:
         print(f"  PDF file        : {b['pdf_path'] or 'N/A'}")
         print(f"  WhatsApp sent   : {'Yes' if b['whatsapp_sent'] else 'No'}")
         print(f"  {'=' * 50}")
+        del_choice = input("  Delete this bill? (y/n) [n]: ").strip().lower()
+        if del_choice == "y":
+            del_files = input("  Also delete invoice files (.txt / .pdf)? (y/n) [y]: ").strip().lower() != "n"
+            if delete_bill(b["bill_no"], delete_files=del_files):
+                print(f"  ✓ Bill {b['bill_no']} deleted successfully.")
+            else:
+                print("  ✗ Failed to delete bill.")
     except (ValueError, IndexError):
         print("  Invalid selection.")
 

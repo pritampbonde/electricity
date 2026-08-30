@@ -300,5 +300,26 @@ def get_bill_stats() -> dict:
         return dict(row)  # type: ignore[arg-type]
 
 
+def delete_bill(bill_no: str, delete_files: bool = True) -> bool:
+    """Delete a bill record by bill_no and optionally remove its invoice files from disk."""
+    bill = get_bill_by_no(bill_no)
+    if not bill:
+        return False
+
+    if delete_files:
+        for key in ("txt_path", "pdf_path"):
+            filepath = bill.get(key)
+            if filepath and os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
+
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM bills WHERE bill_no = ?", (bill_no,))
+        return cur.rowcount > 0
+
+
 # Auto-initialise on import
 init_db()
+
